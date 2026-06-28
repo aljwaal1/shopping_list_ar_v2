@@ -1,13 +1,9 @@
 # تحميل قائمة المشتريات
 
-بعد تشغيل GitHub Actions ونجاح البناء سيظهر APK هنا:
+APK مباشر:
 
-```text
+https://github.com/aljwaal1/shopping_list_ar_v2/raw/main/apk/shopping-list.apk
+
+المسار داخل المستودع:
+
 apk/shopping-list.apk
-```
-
-رابط مباشر بعد رفع المشروع:
-
-```text
-https://github.com/USERNAME/REPO/raw/main/apk/shopping-list.apk
-```
