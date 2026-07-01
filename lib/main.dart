@@ -71,8 +71,6 @@ class _HomeState extends State<Home> {
   String filter = 'الكل';
   String category = 'بقالة';
   int qty = 1;
-  bool reminders = false;
-  TimeOfDay reminderTime = const TimeOfDay(hour: 18, minute: 0);
   final itemCtrl = TextEditingController();
   final searchCtrl = TextEditingController();
   List<Item> items = [];
@@ -86,19 +84,12 @@ class _HomeState extends State<Home> {
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     final saved = p.getStringList('items_v4');
-    setState(() {
-      items = saved == null ? [] : saved.map(Item.decode).toList();
-      reminders = p.getBool('reminders') ?? false;
-      reminderTime = TimeOfDay(hour: p.getInt('reminder_h') ?? 18, minute: p.getInt('reminder_m') ?? 0);
-    });
+    setState(() => items = saved == null ? [] : saved.map(Item.decode).toList());
   }
 
   Future<void> save() async {
     final p = await SharedPreferences.getInstance();
     await p.setStringList('items_v4', items.map((e) => e.encode()).toList());
-    await p.setBool('reminders', reminders);
-    await p.setInt('reminder_h', reminderTime.hour);
-    await p.setInt('reminder_m', reminderTime.minute);
   }
 
   int get pending => items.where((e) => !e.done).length;
@@ -269,33 +260,6 @@ class _HomeState extends State<Home> {
         padding: const EdgeInsets.all(16),
         children: [
           pageHeader('الإعدادات', 'خيارات بسيطة لإدارة قائمتك.'),
-          card(SwitchListTile(
-            value: reminders,
-            onChanged: (v) {
-              setState(() => reminders = v);
-              save();
-              showShortMessage(v ? 'تم تشغيل تذكير التسوق' : 'تم إيقاف تذكير التسوق');
-            },
-            title: const Text('تذكير التسوق'),
-            subtitle: Text(reminders ? 'مفعل عند ${reminderTime.format(context)}' : 'متوقف'),
-            secondary: const Icon(Icons.notifications_active_rounded),
-          )),
-          const SizedBox(height: 10),
-          card(ListTile(
-            leading: const Icon(Icons.schedule_rounded),
-            title: const Text('وقت التذكير'),
-            subtitle: Text(reminderTime.format(context)),
-            trailing: const Icon(Icons.chevron_left_rounded),
-            onTap: () async {
-              final t = await showTimePicker(context: context, initialTime: reminderTime);
-              if (t != null) {
-                setState(() => reminderTime = t);
-                save();
-                showShortMessage('تم تحديث وقت التذكير');
-              }
-            },
-          )),
-          const SizedBox(height: 10),
           card(ListTile(
             leading: const Icon(Icons.cleaning_services_rounded),
             title: const Text('حذف العناصر المكتملة'),
