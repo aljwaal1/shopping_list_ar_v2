@@ -132,11 +132,15 @@ class _HomeState extends State<Home> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('حذف "${item.title}"؟'),
-        content: const Text('هل أنت متأكد من حذف هذا العنصر؟'),
+        title: const Text('حذف العنصر'),
+        content: Text('هل أنت متأكد من حذف "${item.title}"؟'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('حذف')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('حذف'),
+          ),
         ],
       ),
     );
@@ -144,24 +148,9 @@ class _HomeState extends State<Home> {
 
     final i = items.indexOf(item);
     if (i < 0) return;
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     setState(() => items.removeAt(i));
     save();
-
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('تم حذف ${item.title}'),
-        duration: const Duration(seconds: 3),
-        action: SnackBarAction(
-          label: 'تراجع',
-          onPressed: () {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            setState(() => items.insert(i, item));
-            save();
-          },
-        ),
-      ),
-    );
   }
 
   void copyList() {
