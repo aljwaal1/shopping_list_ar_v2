@@ -63,6 +63,8 @@ jobs:
       - name: Set Android package, SDK and signing
         run: |
           cat > android/app/build.gradle.kts <<'EOF'
+          @file:Suppress("DEPRECATION")
+
           import java.io.FileInputStream
           import java.util.Properties
 
@@ -86,10 +88,6 @@ jobs:
               compileOptions {
                   sourceCompatibility = JavaVersion.VERSION_17
                   targetCompatibility = JavaVersion.VERSION_17
-              }
-
-              kotlinOptions {
-                  jvmTarget = JavaVersion.VERSION_17.toString()
               }
 
               defaultConfig {
