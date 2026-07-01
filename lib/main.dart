@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 void main() => runApp(const App());
 
@@ -60,6 +61,7 @@ class App extends StatelessWidget {
 
 class Home extends StatefulWidget {
   const Home({super.key});
+
   @override
   State<Home> createState() => _HomeState();
 }
@@ -69,6 +71,8 @@ class _HomeState extends State<Home> {
   String filter = 'الكل';
   String category = 'بقالة';
   int qty = 1;
+  bool reminders = false;
+  TimeOfDay reminderTime = const TimeOfDay(hour: 18, minute: 0);
   final itemCtrl = TextEditingController();
   final searchCtrl = TextEditingController();
   List<Item> items = [];
@@ -82,12 +86,19 @@ class _HomeState extends State<Home> {
   Future<void> load() async {
     final p = await SharedPreferences.getInstance();
     final saved = p.getStringList('items_v4');
-    setState(() => items = saved == null ? [] : saved.map(Item.decode).toList());
+    setState(() {
+      items = saved == null ? [] : saved.map(Item.decode).toList();
+      reminders = p.getBool('reminders') ?? false;
+      reminderTime = TimeOfDay(hour: p.getInt('reminder_h') ?? 18, minute: p.getInt('reminder_m') ?? 0);
+    });
   }
 
   Future<void> save() async {
     final p = await SharedPreferences.getInstance();
     await p.setStringList('items_v4', items.map((e) => e.encode()).toList());
+    await p.setBool('reminders', reminders);
+    await p.setInt('reminder_h', reminderTime.hour);
+    await p.setInt('reminder_m', reminderTime.minute);
   }
 
   int get pending => items.where((e) => !e.done).length;
@@ -100,6 +111,11 @@ class _HomeState extends State<Home> {
       final s = q.isEmpty || e.title.contains(q) || e.category.contains(q);
       return f && s;
     }).toList();
+  }
+
+  void showShortMessage(String text) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 3)));
   }
 
   void addItem() {
@@ -121,17 +137,35 @@ class _HomeState extends State<Home> {
     save();
   }
 
-  void deleteItem(Item item) {
+  Future<void> deleteItem(Item item) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('حذف "${item.title}"؟'),
+        content: const Text('هل أنت متأكد من حذف هذا العنصر؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('إلغاء')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('حذف')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     final i = items.indexOf(item);
-    setState(() => items.remove(item));
+    if (i < 0) return;
+    setState(() => items.removeAt(i));
     save();
+
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('تم حذف ${item.title}'),
+        duration: const Duration(seconds: 3),
         action: SnackBarAction(
           label: 'تراجع',
           onPressed: () {
-            setState(() => items.insert(i < 0 ? 0 : i, item));
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            setState(() => items.insert(i, item));
             save();
           },
         ),
@@ -142,7 +176,16 @@ class _HomeState extends State<Home> {
   void copyList() {
     final text = items.map((e) => '${e.done ? '✓' : '○'} ${e.title} - ${e.category} - العدد ${e.qty}').join('\n');
     Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ القائمة')));
+    showShortMessage('تم نسخ القائمة');
+  }
+
+  Future<void> contactUs() async {
+    final uri = Uri(scheme: 'mailto', path: developerEmail, queryParameters: const {'subject': 'مراسلة من تطبيق قائمة المشتريات'});
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && mounted) {
+      await Clipboard.setData(const ClipboardData(text: developerEmail));
+      showShortMessage('لم يتم العثور على تطبيق بريد، تم نسخ البريد الإلكتروني');
+    }
   }
 
   @override
@@ -226,6 +269,33 @@ class _HomeState extends State<Home> {
         padding: const EdgeInsets.all(16),
         children: [
           pageHeader('الإعدادات', 'خيارات بسيطة لإدارة قائمتك.'),
+          card(SwitchListTile(
+            value: reminders,
+            onChanged: (v) {
+              setState(() => reminders = v);
+              save();
+              showShortMessage(v ? 'تم تشغيل تذكير التسوق' : 'تم إيقاف تذكير التسوق');
+            },
+            title: const Text('تذكير التسوق'),
+            subtitle: Text(reminders ? 'مفعل عند ${reminderTime.format(context)}' : 'متوقف'),
+            secondary: const Icon(Icons.notifications_active_rounded),
+          )),
+          const SizedBox(height: 10),
+          card(ListTile(
+            leading: const Icon(Icons.schedule_rounded),
+            title: const Text('وقت التذكير'),
+            subtitle: Text(reminderTime.format(context)),
+            trailing: const Icon(Icons.chevron_left_rounded),
+            onTap: () async {
+              final t = await showTimePicker(context: context, initialTime: reminderTime);
+              if (t != null) {
+                setState(() => reminderTime = t);
+                save();
+                showShortMessage('تم تحديث وقت التذكير');
+              }
+            },
+          )),
+          const SizedBox(height: 10),
           card(ListTile(
             leading: const Icon(Icons.cleaning_services_rounded),
             title: const Text('حذف العناصر المكتملة'),
@@ -233,6 +303,7 @@ class _HomeState extends State<Home> {
             onTap: () {
               setState(() => items.removeWhere((e) => e.done));
               save();
+              showShortMessage('تم حذف العناصر المكتملة');
             },
           )),
           const SizedBox(height: 10),
@@ -245,6 +316,7 @@ class _HomeState extends State<Home> {
                 : () {
                     setState(() => items.clear());
                     save();
+                    showShortMessage('تم تفريغ القائمة');
                   },
           )),
         ],
@@ -261,11 +333,9 @@ class _HomeState extends State<Home> {
               const SizedBox(height: 8),
               const Text('تطبيق عربي بسيط لتنظيم مشترياتك اليومية بسهولة، مع التصنيفات، البحث، الحفظ المحلي، وإدارة القائمة بدون الحاجة إلى الإنترنت.'),
               const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: () => Clipboard.setData(const ClipboardData(text: developerEmail)).then((_) => ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم نسخ بريد التواصل')))),
-                icon: const Icon(Icons.email_rounded),
-                label: const Text('تواصل معنا'),
-              ),
+              FilledButton.icon(onPressed: contactUs, icon: const Icon(Icons.email_rounded), label: const Text('إرسال بريد للدعم')),
+              const SizedBox(height: 8),
+              SelectableText(developerEmail, style: TextStyle(color: Colors.grey.shade700)),
             ],
           )),
         ],
