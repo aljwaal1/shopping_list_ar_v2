@@ -1,4 +1,4 @@
-name: Build Google Play AAB and APK
+name: Build Signed Google Play AAB and APK
 
 on:
   push:
@@ -41,16 +41,85 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Set Android package and minimum SDK
+      - name: Prepare release signing
+        env:
+          UPLOAD_KEYSTORE_BASE64: ${{ secrets.UPLOAD_KEYSTORE_BASE64 }}
+          UPLOAD_KEYSTORE_PASSWORD: ${{ secrets.UPLOAD_KEYSTORE_PASSWORD }}
+          UPLOAD_KEY_ALIAS: ${{ secrets.UPLOAD_KEY_ALIAS }}
+          UPLOAD_KEY_PASSWORD: ${{ secrets.UPLOAD_KEY_PASSWORD }}
         run: |
-          if [ -f android/app/build.gradle.kts ]; then
-            perl -0pi -e 's/applicationId = "[^"]+"/applicationId = "com.explapp.shoppinglist"/g' android/app/build.gradle.kts
-            perl -0pi -e 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' android/app/build.gradle.kts
+          if [ -z "$UPLOAD_KEYSTORE_BASE64" ] || [ -z "$UPLOAD_KEYSTORE_PASSWORD" ] || [ -z "$UPLOAD_KEY_ALIAS" ] || [ -z "$UPLOAD_KEY_PASSWORD" ]; then
+            echo "Missing signing secrets. Add UPLOAD_KEYSTORE_BASE64, UPLOAD_KEYSTORE_PASSWORD, UPLOAD_KEY_ALIAS, and UPLOAD_KEY_PASSWORD."
+            exit 1
           fi
-          if [ -f android/app/build.gradle ]; then
-            perl -0pi -e "s/applicationId ['\"][^'\"]+['\"]/applicationId 'com.explapp.shoppinglist'/g" android/app/build.gradle
-            perl -0pi -e 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
-          fi
+          echo "$UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/app/upload-keystore.jks
+          cat > android/key.properties <<EOF
+          storePassword=$UPLOAD_KEYSTORE_PASSWORD
+          keyPassword=$UPLOAD_KEY_PASSWORD
+          keyAlias=$UPLOAD_KEY_ALIAS
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Set Android package, SDK and signing
+        run: |
+          cat > android/app/build.gradle.kts <<'EOF'
+          import java.io.FileInputStream
+          import java.util.Properties
+
+          plugins {
+              id("com.android.application")
+              id("kotlin-android")
+              id("dev.flutter.flutter-gradle-plugin")
+          }
+
+          val keystoreProperties = Properties()
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          if (keystorePropertiesFile.exists()) {
+              keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+          }
+
+          android {
+              namespace = "com.explapp.shoppinglist"
+              compileSdk = flutter.compileSdkVersion
+              ndkVersion = flutter.ndkVersion
+
+              compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+
+              kotlinOptions {
+                  jvmTarget = JavaVersion.VERSION_17.toString()
+              }
+
+              defaultConfig {
+                  applicationId = "com.explapp.shoppinglist"
+                  minSdk = 23
+                  targetSdk = flutter.targetSdkVersion
+                  versionCode = flutter.versionCode
+                  versionName = flutter.versionName
+              }
+
+              signingConfigs {
+                  create("release") {
+                      keyAlias = keystoreProperties["keyAlias"] as String
+                      keyPassword = keystoreProperties["keyPassword"] as String
+                      storeFile = file(keystoreProperties["storeFile"] as String)
+                      storePassword = keystoreProperties["storePassword"] as String
+                  }
+              }
+
+              buildTypes {
+                  release {
+                      signingConfig = signingConfigs.getByName("release")
+                  }
+              }
+          }
+
+          flutter {
+              source = "../.."
+          }
+          EOF
 
       - name: Simple AndroidManifest without sensitive permissions
         run: |
@@ -87,10 +156,10 @@ jobs:
       - name: Flutter analyze
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Build APK
+      - name: Build signed APK
         run: flutter build apk --release
 
-      - name: Build AAB for Google Play
+      - name: Build signed AAB for Google Play
         run: flutter build appbundle --release
 
       - name: Copy build outputs
@@ -116,7 +185,7 @@ jobs:
 
           https://github.com/${REPO}/raw/main/play/shopping-list.aab
 
-          ملاحظة: قبل النشر النهائي يجب اعتماد مفتاح توقيع رسمي ثابت للحساب.
+          هذا الملف موقّع بتوقيع Release عبر GitHub Secrets.
           EOF
 
       - name: Commit build outputs
@@ -124,5 +193,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add apk/shopping-list.apk play/shopping-list.aab DOWNLOAD_APK.md DOWNLOAD_AAB.md
-          git commit -m "Build Google Play AAB and APK" || echo "No changes to commit"
+          git commit -m "Build signed Google Play AAB and APK" || echo "No changes to commit"
           git push
