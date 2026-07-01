@@ -1,11 +1,13 @@
-name: Build APK Direct
+name: Build Google Play AAB and APK
 
 on:
   push:
     branches: [ main ]
     paths-ignore:
       - "apk/**"
+      - "play/**"
       - "DOWNLOAD_APK.md"
+      - "DOWNLOAD_AAB.md"
   workflow_dispatch:
 
 permissions:
@@ -39,25 +41,26 @@ jobs:
       - name: Flutter pub get
         run: flutter pub get
 
-      - name: Set applicationId
+      - name: Set Android package and minimum SDK
         run: |
           if [ -f android/app/build.gradle.kts ]; then
             perl -0pi -e 's/applicationId = "[^"]+"/applicationId = "com.explapp.shoppinglist"/g' android/app/build.gradle.kts
             perl -0pi -e 's/minSdk = flutter.minSdkVersion/minSdk = 23/g' android/app/build.gradle.kts
           fi
           if [ -f android/app/build.gradle ]; then
-            perl -0pi -e "s/applicationId ['"][^'"]+['"]/applicationId 'com.explapp.shoppinglist'/g" android/app/build.gradle
+            perl -0pi -e "s/applicationId ['\"][^'\"]+['\"]/applicationId 'com.explapp.shoppinglist'/g" android/app/build.gradle
             perl -0pi -e 's/minSdkVersion flutter.minSdkVersion/minSdkVersion 23/g' android/app/build.gradle
           fi
 
-      - name: Simple AndroidManifest
+      - name: Simple AndroidManifest without sensitive permissions
         run: |
           cat > android/app/src/main/AndroidManifest.xml <<'EOF'
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
                   android:label="قائمة المشتريات"
                   android:name="${applicationName}"
-                  android:icon="@mipmap/ic_launcher">
+                  android:icon="@mipmap/ic_launcher"
+                  android:usesCleartextTraffic="false">
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
@@ -87,30 +90,39 @@ jobs:
       - name: Build APK
         run: flutter build apk --release
 
-      - name: Copy APK direct
-        run: |
-          mkdir -p apk
-          cp build/app/outputs/flutter-apk/app-release.apk apk/shopping-list.apk
+      - name: Build AAB for Google Play
+        run: flutter build appbundle --release
 
-      - name: Update download page
+      - name: Copy build outputs
+        run: |
+          mkdir -p apk play
+          cp build/app/outputs/flutter-apk/app-release.apk apk/shopping-list.apk
+          cp build/app/outputs/bundle/release/app-release.aab play/shopping-list.aab
+
+      - name: Update download pages
         run: |
           REPO="${GITHUB_REPOSITORY}"
           cat > DOWNLOAD_APK.md <<EOF
           # تحميل قائمة المشتريات
 
-          APK مباشر:
+          APK مباشر للتجربة خارج Google Play:
 
           https://github.com/${REPO}/raw/main/apk/shopping-list.apk
+          EOF
+          cat > DOWNLOAD_AAB.md <<EOF
+          # ملف Google Play AAB
 
-          المسار داخل المستودع:
+          ملف الرفع على Google Play Console:
 
-          apk/shopping-list.apk
+          https://github.com/${REPO}/raw/main/play/shopping-list.aab
+
+          ملاحظة: قبل النشر النهائي يجب اعتماد مفتاح توقيع رسمي ثابت للحساب.
           EOF
 
-      - name: Commit APK and download page
+      - name: Commit build outputs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add apk/shopping-list.apk DOWNLOAD_APK.md
-          git commit -m "Build APK direct" || echo "No changes to commit"
+          git add apk/shopping-list.apk play/shopping-list.aab DOWNLOAD_APK.md DOWNLOAD_AAB.md
+          git commit -m "Build Google Play AAB and APK" || echo "No changes to commit"
           git push
