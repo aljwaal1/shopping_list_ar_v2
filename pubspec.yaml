@@ -1,7 +1,7 @@
 name: shopping_list_ar
-description: shopping list Android APK direct
+description: Arabic shopping list app for Android and Google Play.
 publish_to: 'none'
-version: 4.0.0+4
+version: 1.0.0+1
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
