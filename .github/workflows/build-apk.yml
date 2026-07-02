@@ -155,10 +155,10 @@ jobs:
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build signed APK
-        run: flutter build apk --release --no-enable-impeller
+        run: flutter build apk --release
 
       - name: Build signed AAB for Google Play
-        run: flutter build appbundle --release --no-enable-impeller
+        run: flutter build appbundle --release
 
       - name: Copy build outputs
         run: |
@@ -183,7 +183,7 @@ jobs:
 
           https://github.com/${REPO}/raw/main/play/shopping-list.aab
 
-          هذا الملف موقّع بتوقيع Release ومبني بدون Impeller لتحسين التوافق.
+          هذا الملف موقّع بتوقيع Release عبر GitHub Secrets.
           EOF
 
       - name: Commit build outputs
