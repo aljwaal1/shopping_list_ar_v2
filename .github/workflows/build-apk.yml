@@ -119,6 +119,17 @@ jobs:
           }
           EOF
 
+      - name: Create MainActivity in final package
+        run: |
+          mkdir -p android/app/src/main/kotlin/com/explapp/shoppinglist
+          cat > android/app/src/main/kotlin/com/explapp/shoppinglist/MainActivity.kt <<'EOF'
+          package com.explapp.shoppinglist
+
+          import io.flutter.embedding.android.FlutterActivity
+
+          class MainActivity: FlutterActivity()
+          EOF
+
       - name: Simple AndroidManifest without sensitive permissions
         run: |
           cat > android/app/src/main/AndroidManifest.xml <<'EOF'
@@ -129,7 +140,7 @@ jobs:
                   android:icon="@mipmap/ic_launcher"
                   android:usesCleartextTraffic="false">
                   <activity
-                      android:name=".MainActivity"
+                      android:name="com.explapp.shoppinglist.MainActivity"
                       android:exported="true"
                       android:launchMode="singleTop"
                       android:theme="@style/LaunchTheme"
